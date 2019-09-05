@@ -2,8 +2,9 @@ local Azimuth = include("azimuthlib-basic")
 
 -- load config
 local configOptions = {
-  _version = { default = "0.3.2", comment = "Config version. Don't touch." },
+  _version = { default = "0.4", comment = "Config version. Don't touch." },
   LogLevel = { default = 2, min = 0, max = 4, format = "floor", comment = "0 - Disable, 1 - Errors, 2 - Warnings, 3 - Info, 4 - Debug." },
+  FileLogLevel = { default = 2, min = 0, max = 4, format = "floor", comment = "0 - Disable, 1 - Errors, 2 - Warnings, 3 - Info, 4 - Debug." },
   RespawnShips = { default = true, comment = "If false, disable ship respawn in all sectors." },
   RespawnStations = { default = true, comment = "If false, ddisable station respawn in all sectors." },
   ShipRespawnInterval = { default = 120, min = 10, comment = "Interval in seconds between ship respawns." },
@@ -167,8 +168,13 @@ if config._version == "0.3" then
     config._version = "0.3.2"
     isModified = true
 end
+if config._version == "0.3.2" then
+    config._version = "0.4"
+    isModified = true
+    config.FileLogLevel = config.LogLevel
+end
 
-local Log = Azimuth.logs("NPCRespawn", config.LogLevel)
+local Log = Azimuth.logs("NPCRespawn", config.LogLevel, config.FileLogLevel)
 
 if isModified then
     Log.Debug("Config was modified, need to resave it")

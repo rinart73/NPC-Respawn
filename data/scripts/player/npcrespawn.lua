@@ -1,5 +1,9 @@
 if onClient() then return end
 
+package.path = package.path .. ";data/scripts/lib/?.lua"
+
+local Azimuth, config, Log = unpack(include("npcrespawninit"))
+
 -- namespace NPCRespawn
 NPCRespawn = {}
 
@@ -13,7 +17,11 @@ function NPCRespawn.initialize(mode, arg)
         Player():sendChatMessage("Server"%_t, 0, "Changed sector type to '%s'."%_t, arg)
     else
         sector:setValue("npc_respawn_"..mode, arg)
-        sector:invokeFunction("data/scripts/sector/npcrespawn.lua", "reloadSettings")
+        local status = sector:invokeFunction("npcrespawn.lua", "reloadSettings")
+        if status ~= 0 then
+            Log.Error("player file - failed to reload settings, status %i", status)
+            return
+        end
         Player():sendChatMessage("Server"%_t, 0, "Changed sector settings."%_t, arg)
     end
     terminate()

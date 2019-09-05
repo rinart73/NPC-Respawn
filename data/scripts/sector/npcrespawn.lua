@@ -11,8 +11,6 @@ local SectorGenerator = include("SectorGenerator")
 local SectorSpecifics = include("data/scripts/sectorspecifics")
 local StationDetector = include("NPCRespawnStationDetector")
 local Azimuth, config, Log = unpack(include("npcrespawninit"))
-if anynils(Azimuth, config, Log) then terminate() return end
-
 
 -- namespace NPCRespawn
 NPCRespawn = {}
@@ -114,20 +112,30 @@ local function getCurrentShipAmounts(saveValues)
     local militaryAmount = 0
     local defenderAmount = 0
     local carrierAmount = 0
-    local _, icon, hasAIPatrol
+    local status, icon, hasAIPatrol
+    local shipScripts
     for _, ship in pairs(ships) do
         if ship.factionIndex == faction.index then
+            shipScripts = {}
+            for _, path in pairs(ship:getScripts()) do
+                path = path:gsub("\\","/")
+                shipScripts[path] = true
+            end
+
             --Log.Debug("(%i:%i) - ship title = %s, scripts: %s", x, y, ship.title, Log.isDebug and Azimuth.serialize(ship:getScripts()) or "")
-            if ship:hasScript("data/scripts/entity/ai/mine.lua") then
+            if shipScripts["data/scripts/entity/ai/mine.lua"] then
                 minerAmount = minerAmount + 1
             elseif ship:getValue("is_armed")
-              and not ship:hasScript("data/scripts/entity/blocker.lua")
-              and not ship:hasScript("data/scripts/entity/dialogs/encounters/persecutor.lua")
-              and not ship:hasScript("data/scripts/entity/story/adventurer1.lua") then
-                _, icon = ship:invokeFunction("data/scripts/entity/icon.lua", "secure")
+              and not shipScripts["data/scripts/entity/blocker.lua"]
+              and not shipScripts["data/scripts/entity/dialogs/encounters/persecutor.lua"]
+              and not shipScripts["data/scripts/entity/story/adventurer1.lua"] then
+                status, icon = ship:invokeFunction("icon.lua", "secure")
+                if status ~= 0 then
+                    Log.Error("sector - failed to retrieve an icon, status %i", status)
+                end
                 if icon and icon.icon then
                     --Log.Debug("(%i:%i) - ship title = %s, icon = %s", x, y, ship.title, icon.icon)
-                    hasAIPatrol = ship:hasScript("data/scripts/entity/ai/patrol.lua")
+                    hasAIPatrol = shipScripts["data/scripts/entity/ai/patrol.lua"]
                     if icon.icon == "data/textures/icons/pixel/carrier.png" and hasAIPatrol then
                         carrierAmount = carrierAmount + 1
                     --elseif icon.icon == "data/textures/icons/pixel/defender.png" and hasAIPatrol and ship:hasScript("data/scripts/entity/antismuggle.lua") then

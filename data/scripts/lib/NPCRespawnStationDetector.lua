@@ -19,11 +19,15 @@ function StationDetector.isFactory(entity)
       "data/scripts/entity/merchants/midfactory.lua"
     }
     local script
-    for i = 1, #scripts do
-        if entity:hasScript(scripts[i]) then
-            script = scripts[i]
-            break
+    for _, path in pairs(entity:getScripts()) do
+        path = path:gsub("\\","/")
+        for i = 1, #scripts do
+            if scripts[i] == path then
+                script = scripts[i]
+                break
+            end
         end
+        if script then break end
     end
     if not script then return end
     -- save factory good
@@ -36,8 +40,11 @@ function StationDetector.isFactory(entity)
 end
 
 function StationDetector.isPlanetaryTradingPost(entity)
-    if entity:hasScript("data/scripts/entity/merchants/planetarytradingpost.lua") then -- it's just not the first one
-        return "createPlanetaryTradingPost", true
+    for _, path in pairs(entity:getScripts()) do
+        path = path:gsub("\\","/")
+        if path == "data/scripts/entity/merchants/planetarytradingpost.lua" then -- it's just not the first one
+            return "createPlanetaryTradingPost", true
+        end
     end
 end
 
