@@ -15,7 +15,7 @@ local Azimuth, config, Log = unpack(include("npcrespawninit"))
 -- namespace NPCRespawn
 NPCRespawn = {}
 
-local sector, x, y, generatorScript
+local x, y, generatorScript
 local isGenerating = true -- don't respawn anything while sector is being generated
 local data = {
   shipTimer = 0,
@@ -25,15 +25,17 @@ local data = {
 local generatorArmed = AsyncShipGenerator(NPCRespawn, NPCRespawn.resolveIntersections)
 local stationGenerator
 
-local function lateInitialization()
+local function lateInitialization(debugNumber)
+    Log.Debug("(%i:%i) - lateInitialization: %i", x, y, debugNumber)
     -- get sector generator script
-    generatorScript = sector:getValue("generator_script")
+    generatorScript = Sector():getValue("generator_script")
     if not generatorScript then
         generatorScript = SectorSpecifics(x, y, Server().seed):getScript()
         generatorScript = string.gsub(generatorScript, "^[^/]+/", "")
     end
     if not config.RespawnSectors[generatorScript] then
         Log.Debug("(%i:%i) - generatorScript: %s, script terminated", x, y, generatorScript)
+        Log.Debug("(%i:%i) - lateInitialization finished: %i", x, y, debugNumber)
         terminate()
         return
     else
@@ -42,19 +44,24 @@ local function lateInitialization()
     -- init other vars
     stationGenerator = SectorGenerator(x, y)
 
+    Log.Debug("(%i:%i) - lateInitialization finished: %i", x, y, debugNumber)
     return true
 end
 
-local function finishedGenerating()
+local function finishedGenerating(debugNumber)
+    Log.Debug("(%i:%i) - finishedGenerating: %i", x, y, debugNumber)
     isGenerating = false
-    sector:unregisterCallback("onPlayerEntered", "onPlayerEntered")
-    sector:unregisterCallback("onEntityJump", "onEntityJump")
+    --sector:unregisterCallback("onPlayerEntered", "onPlayerEntered")
+    --sector:unregisterCallback("onEntityJump", "onEntityJump")
+    Log.Debug("(%i:%i) - finishedGenerating finished: %i", x, y, debugNumber)
 end
 
-local function checkSavedValuesAgainstConfig() -- check if saved ship respawn values match with config settings
+local function checkSavedValuesAgainstConfig(debugNumber) -- check if saved ship respawn values match with config settings
+    Log.Debug("(%i:%i) - checkSavedValuesAgainstConfig: %i", x, y, debugNumber)
     local settings = config.RespawnSectors[generatorScript]
     local newSettings = {}
     local sectorVar
+    local sector = Sector()
 
     -- station
     sectorVar = sector:getValue("npc_respawn_station")
@@ -93,21 +100,24 @@ local function checkSavedValuesAgainstConfig() -- check if saved ship respawn va
     else
         sector:unregisterCallback("onDestroyed", "onDestroyed")
     end
+    Log.Debug("(%i:%i) - checkSavedValuesAgainstConfig finished: %i", x, y, debugNumber)
 end
 
-local function getCurrentShipAmounts(saveValues)
+local function getCurrentShipAmounts(saveValues, debugNumber)
+    Log.Debug("(%i:%i) - getCurrentShipAmounts: %i", x, y, debugNumber)
     local faction = Galaxy():getControllingFaction(x, y)
     if not faction or not faction.isAIFaction then
         if saveValues then
             Log.Debug("(%i:%i) - nobody controls this sector, randomize values", x, y)
             data.settings = {}
-            checkSavedValuesAgainstConfig()
+            checkSavedValuesAgainstConfig(1)
         end
+        Log.Debug("(%i:%i) - getCurrentShipAmounts finished: %i", x, y, debugNumber)
         return
     end
 
     -- count all ship types
-    local ships = {sector:getEntitiesByType(EntityType.Ship)}
+    local ships = {Sector():getEntitiesByType(EntityType.Ship)}
     local minerAmount = 0
     local militaryAmount = 0
     local defenderAmount = 0
@@ -157,15 +167,17 @@ local function getCurrentShipAmounts(saveValues)
           military = militaryAmount,
           miner = minerAmount
         }
-        checkSavedValuesAgainstConfig()
+        checkSavedValuesAgainstConfig(2)
     end
-    
+
+    Log.Debug("(%i:%i) - getCurrentShipAmounts finished: %i", x, y, debugNumber)
     return carrierAmount, defenderAmount, militaryAmount, minerAmount
 end
 
 function NPCRespawn.initialize()
-    sector = Sector()
+    local sector = Sector()
     x, y = sector:getCoordinates()
+    Log.Debug("(%i:%i) - initialize", x, y)
 
     sector:registerCallback("onPlayerEntered", "onPlayerEntered")
     sector:registerCallback("onEntityJump", "onEntityJump")
@@ -174,11 +186,15 @@ function NPCRespawn.initialize()
     if typeChanged then -- type was changed, override sector settings
         sector:setValue("npc_respawn_type_changed", nil)
         Log.Debug("(%i:%i) - type was changed, randomize settings", x, y)
-        if not lateInitialization() then return end
+        if not lateInitialization(1) then
+            Log.Debug("(%i:%i) - initialize finished", x, y)
+            return
+        end
         data.settings = {}
-        checkSavedValuesAgainstConfig()
-        finishedGenerating()
+        checkSavedValuesAgainstConfig(3)
+        finishedGenerating(1)
     end
+    Log.Debug("(%i:%i) - initialize finished", x, y)
 end
 
 function NPCRespawn.secure()
@@ -186,7 +202,11 @@ function NPCRespawn.secure()
 end
 
 function NPCRespawn.restore(_data)
-    if not lateInitialization() then return end
+    Log.Debug("(%i:%i) - restore", x, y)
+    if not lateInitialization(2) then
+        Log.Debug("(%i:%i) - restore finished", x, y)
+        return
+    end
     Log.Debug("(%i:%i) - restore: %s", x, y, Log.isDebug and Azimuth.serialize(_data) or "")
 
     if _data then -- sector was already generated and then saved to disk
@@ -194,18 +214,19 @@ function NPCRespawn.restore(_data)
         -- sector was generated but nobody entered it, which means that current ship amounts weren't saved
         if not data.settings then
             Log.Debug("(%i:%i) - save current ship amounts", x, y)
-            getCurrentShipAmounts(true)
+            getCurrentShipAmounts(true, 1)
         else -- check if saved ship respawn values match with config settings
             Log.Debug("(%i:%i) - data.settings is present, just check settings", x, y)
-            checkSavedValuesAgainstConfig()
+            checkSavedValuesAgainstConfig(4)
         end
     else -- no data but restore was called, which means that script was never executed in this sector before, but sector was generated
         -- save randomized respawn values
         Log.Debug("(%i:%i) - randomize settings", x, y)
         data.settings = {}
-        checkSavedValuesAgainstConfig()
+        checkSavedValuesAgainstConfig(5)
     end
-    finishedGenerating()
+    finishedGenerating(2)
+    Log.Debug("(%i:%i) - restore finished", x, y)
 end
 
 function NPCRespawn.getUpdateInterval()
@@ -214,6 +235,7 @@ end
 
 function NPCRespawn.update(timePassed)
     if isGenerating then return end
+    Log.Debug("(%i:%i) - update", x, y)
 
     --Log.Debug("(%i:%i): DATA %s", x, y, Azimuth.serialize(data))
     if config.RespawnStations and data.settings["station"] and #data.stations > 0 then
@@ -243,7 +265,7 @@ function NPCRespawn.update(timePassed)
                 return
             end
         
-            local carrierAmount, defenderAmount, militaryAmount, minerAmount = getCurrentShipAmounts()
+            local carrierAmount, defenderAmount, militaryAmount, minerAmount = getCurrentShipAmounts(false, 2)
             local maxRespawnAmount = config.ShipRespawnAmount
             local ship, amountDifference, dir, pos, up, look
             
@@ -314,27 +336,30 @@ function NPCRespawn.update(timePassed)
             end
         end
     end
+    Log.Debug("(%i:%i) - update finished", x, y)
 end
 
 function NPCRespawn.onPlayerEntered()
     Log.Debug("(%i:%i) - player entered, generating: %s", x, y, tostring(isGenerating))
     if not isGenerating then return end
     -- sector finished generating and player jumped in. Time to save current ship amounts
-    if not lateInitialization() then return end
-    getCurrentShipAmounts(true)
-    finishedGenerating()
+    if not lateInitialization(3) then return end
+    getCurrentShipAmounts(true, 3)
+    finishedGenerating(3)
 end
 
 function NPCRespawn.onEntityJump(shipIndex, x, y) -- this should solve starting sector problem
+    Log.Debug("(%i:%i) - onEntityJump, generating: %s", x, y, tostring(isGenerating))
     if not isGenerating then return end
-    if not lateInitialization() then return end
-    getCurrentShipAmounts(true)
-    finishedGenerating()
+    if not lateInitialization(4) then return end
+    getCurrentShipAmounts(true, 4)
+    finishedGenerating(4)
 end
 
 function NPCRespawn.onDestroyed(entityIndex)
     local entity = Entity(entityIndex)
     if not entity.isStation or not entity.aiOwned then return end
+    Log.Debug("(%i:%i) - onDestroyed", x, y)
 
     -- check entity with custom detectors first
     local func, respawnData, detector
@@ -351,6 +376,7 @@ function NPCRespawn.onDestroyed(entityIndex)
     if func then
         if not stationGenerator[func] then
             Log.Error("(%i:%i) - Respawn function doesn't exist: %s", x, y, func)
+            Log.Debug("(%i:%i) - onDestroyed finished", x, y)
             return
         end
         Log.Debug("(%i:%i) - station was destroyed: %s", x, y, func)
@@ -359,6 +385,7 @@ function NPCRespawn.onDestroyed(entityIndex)
           func = func,
           data = respawnData
         }
+        Log.Debug("(%i:%i) - onDestroyed finished", x, y)
         return
     end
     
@@ -367,12 +394,14 @@ function NPCRespawn.onDestroyed(entityIndex)
     Log.Debug("(%i:%i) - station was destroyed: %s", x, y, Log.isDebug and Azimuth.serialize(scripts) or "")
     if not scripts[0] then
         Log.Error("(%i:%i) - station had no scripts", x, y)
+        Log.Debug("(%i:%i) - onDestroyed finished", x, y)
         return
     end
     func = config.StationScripts[scripts[0]]
     if func then
         if not stationGenerator[func] then
             Log.Error("(%i:%i) - Respawn function doesn't exist: %s (%s)", x, y, func, scripts[0])
+            Log.Debug("(%i:%i) - onDestroyed finished", x, y)
             return
         end
         data.stations[#data.stations+1] = {
@@ -385,10 +414,11 @@ function NPCRespawn.onDestroyed(entityIndex)
           script = scripts[0]
         }
     end
+    Log.Debug("(%i:%i) - onDestroyed finished", x, y)
 end
 
 function NPCRespawn.reloadSettings()
-    checkSavedValuesAgainstConfig()
+    checkSavedValuesAgainstConfig(6)
 end
 
 function NPCRespawn.resolveIntersections(ships)

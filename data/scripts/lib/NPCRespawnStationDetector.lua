@@ -1,7 +1,7 @@
 package.path = package.path .. ";data/scripts/lib/?.lua"
 
 local Azimuth, config, Log = unpack(include("npcrespawninit"))
-if anynils(Azimuth, config, Log) then terminate() return end
+if anynils(Azimuth, config, Log) then return end
 
 
 local StationDetector = {}
